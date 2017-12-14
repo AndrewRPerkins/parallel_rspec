@@ -38,6 +38,21 @@ db_namespace = namespace :db do
       end
     end
 
+    # desc "migrate"
+    task :migrate => %w(environment) do
+      should_reconnect = ActiveRecord::Base.connection_pool.active_connection?
+      begin
+        ParallelRSpec::Workers.new.run_test_workers do |worker|
+          ActiveRecord::Schema.verbose = false
+          ActiveRecord::Tasks::DatabaseTasks.migrate
+        end
+      ensure
+        if should_reconnect
+          ActiveRecord::Base.establish_connection(ActiveRecord::Base.configurations['test'])
+        end
+      end
+    end
+
     # desc "Recreate the test database from the current schema"
     task :load do
       db_namespace["db:parallel:purge"].invoke
@@ -47,6 +62,7 @@ db_namespace = namespace :db do
         when :sql
           db_namespace["parallel:load_structure"].invoke
       end
+      db_namespace["parallel:migrate"].invoke
     end
 
     # desc "Check for pending migrations and load the test schema"
